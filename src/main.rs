@@ -1,4 +1,8 @@
+extern crate dotenv;
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+
+use dotenv::dotenv;
+use std::env;
 
 mod models;
 mod routes;
@@ -15,7 +19,14 @@ async fn manual_hello() -> impl Responder {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    dotenv().ok();
     let db = connect_to_db().await;
+    let port = env::var("PORT")
+        .expect("Can't get port")
+        .parse::<u16>()
+        .expect("Cannot get port");
+
+    println!("Server running at port {}", port);
 
     HttpServer::new(move || {
         App::new()
@@ -28,7 +39,7 @@ async fn main() -> std::io::Result<()> {
             .service(update_record)
             .route("/hey", web::get().to(manual_hello))
     })
-    .bind(("127.0.0.1", 8000))?
+    .bind(("127.0.0.1", port))?
     .run()
     .await
 }
