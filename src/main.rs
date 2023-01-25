@@ -1,4 +1,5 @@
 extern crate dotenv;
+use actix_cors::Cors;
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 
 use dotenv::dotenv;
@@ -29,7 +30,13 @@ async fn main() -> std::io::Result<()> {
     println!("Server running at port {}", port);
 
     HttpServer::new(move || {
+        let cors = Cors::default()
+            .allow_any_origin()
+            .allow_any_method()
+            .max_age(3600);
+
         App::new()
+            .wrap(cors)
             .app_data(web::Data::new(db.clone()))
             .service(hello)
             .service(create_record)

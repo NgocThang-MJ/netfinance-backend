@@ -62,7 +62,11 @@ pub async fn update_record(
 ) -> HttpResponse {
     let records_coll = db.collection::<Record>("records");
 
-    let obj_id = ObjectId::parse_str(id.into_inner()).unwrap();
+    let obj_id = match ObjectId::parse_str(id.into_inner()) {
+        Ok(objid) => objid,
+        Err(err) => return HttpResponse::BadRequest().body(err.to_string()),
+    };
+
     let filter = doc! {"_id": obj_id};
 
     let a = doc! {
@@ -86,7 +90,11 @@ pub async fn update_record(
 pub async fn delete_record(db: Data<Database>, id: Path<String>) -> HttpResponse {
     let records_coll = db.collection::<Record>("records");
 
-    let obj_id = ObjectId::parse_str(id.into_inner()).unwrap();
+    let obj_id = match ObjectId::parse_str(id.into_inner()) {
+        Ok(objid) => objid,
+        Err(err) => return HttpResponse::BadRequest().body(err.to_string()),
+    };
+
     let filter = doc! {"_id": obj_id};
 
     let result = records_coll.delete_one(filter, None).await;
