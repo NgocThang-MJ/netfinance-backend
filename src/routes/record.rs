@@ -8,8 +8,14 @@ use mongodb::{
     bson::{doc, oid::ObjectId},
     Database,
 };
+use serde::Serialize;
 
 use crate::models::record::Record;
+
+#[derive(Serialize)]
+struct Msg {
+    msg: String,
+}
 
 #[get("/records")]
 pub async fn get_records(db: Data<Database>) -> HttpResponse {
@@ -22,7 +28,7 @@ pub async fn get_records(db: Data<Database>) -> HttpResponse {
             let records: Vec<Record> = cursor.try_collect().await.unwrap();
             HttpResponse::Ok().json(records)
         }
-        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+        Err(err) => HttpResponse::InternalServerError().json(err.to_string()),
     }
 }
 
@@ -30,7 +36,11 @@ pub async fn get_records(db: Data<Database>) -> HttpResponse {
 pub async fn get_record(db: Data<Database>, id: Path<String>) -> HttpResponse {
     let records_coll = db.collection::<Record>("records");
 
-    let obj_id = ObjectId::parse_str(id.into_inner()).unwrap();
+    let obj_id = match ObjectId::parse_str(id.into_inner()) {
+        Ok(objid) => objid,
+        Err(err) => return HttpResponse::BadRequest().body(err.to_string()),
+    };
+
     let filter = doc! {"_id": obj_id};
 
     let result = records_coll.find_one(filter, None).await;
@@ -48,8 +58,12 @@ pub async fn create_record(db: Data<Database>, new_record: Json<Record>) -> Http
 
     let result = records_coll.insert_one(new_record.into_inner(), None).await;
 
+    let success_msg = Msg {
+        msg: String::from("Record created"),
+    };
+
     match result {
-        Ok(_) => HttpResponse::Ok().body("record created"),
+        Ok(_) => HttpResponse::Ok().json(success_msg),
         Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
     }
 }
