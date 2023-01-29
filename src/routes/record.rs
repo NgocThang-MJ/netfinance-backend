@@ -5,7 +5,8 @@ use actix_web::{
 };
 use futures::stream::TryStreamExt;
 use mongodb::{
-    bson::{doc, oid::ObjectId},
+    bson::{doc, oid::ObjectId, Document},
+    // options::FindOptions,
     Database,
 };
 use serde::Serialize;
@@ -21,11 +22,24 @@ struct Msg {
 pub async fn get_records(db: Data<Database>) -> HttpResponse {
     let records_coll = db.collection::<Record>("records");
 
-    let cursor = records_coll.find(None, None).await;
+    let pipeline = vec![
+        doc! {"$sort": {
+            "date": -1
+        }},
+        doc! {"$limit": 30},
+    ];
+
+    //let find_options = FindOptions::builder()
+    //    .sort(doc! {"date": -1})
+    //    .limit(30)
+    //    .build();
+
+    // let cursor = records_coll.find(None, find_options).await;
+    let cursor = records_coll.aggregate(pipeline, None).await;
 
     match cursor {
         Ok(cursor) => {
-            let records: Vec<Record> = cursor.try_collect().await.unwrap();
+            let records: Vec<Document> = cursor.try_collect().await.unwrap();
             HttpResponse::Ok().json(records)
         }
         Err(err) => HttpResponse::InternalServerError().json(err.to_string()),
