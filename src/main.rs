@@ -7,6 +7,7 @@ use std::env;
 
 mod models;
 mod routes;
+mod types;
 mod util;
 
 use routes::hello::hello;

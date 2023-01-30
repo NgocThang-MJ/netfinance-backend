@@ -1,6 +1,6 @@
 use actix_web::{
     delete, get, post, put,
-    web::{Data, Json, Path},
+    web::{Data, Json, Path, Query},
     HttpResponse,
 };
 use futures::stream::TryStreamExt;
@@ -9,25 +9,32 @@ use mongodb::{
     // options::FindOptions,
     Database,
 };
-use serde::Serialize;
 
 use crate::models::record::Record;
-
-#[derive(Serialize)]
-struct Msg {
-    msg: String,
-}
+use crate::types::messages::{DateRangeQuery, ResponseMsg};
 
 #[get("/records")]
-pub async fn get_records(db: Data<Database>) -> HttpResponse {
+pub async fn get_records(db: Data<Database>, query: Query<DateRangeQuery>) -> HttpResponse {
     let records_coll = db.collection::<Record>("records");
+    // Some default error message
+    let error_400 = ResponseMsg {
+        msg: String::from("Bad Request"),
+    };
+    let error_500 = ResponseMsg {
+        msg: String::from("Internal Server Error"),
+    };
 
-    let pipeline = vec![
-        doc! {"$sort": {
-            "date": -1
-        }},
-        doc! {"$limit": 30},
-    ];
+    let mut pipeline = vec![];
+
+    // Check if request have start_date and end_date query
+    if query.start_date.is_none() || query.end_date.is_none() {
+        return HttpResponse::BadRequest().json(error_400);
+    }
+    let start_date = query.start_date.clone().unwrap_or_default();
+    let end_date = query.end_date.clone().unwrap_or_default();
+
+    pipeline.push(doc! {"$match": {"date": {"$gte": start_date, "$lte": end_date}}});
+    pipeline.push(doc! {"$sort": {"date": -1}});
 
     //let find_options = FindOptions::builder()
     //    .sort(doc! {"date": -1})
@@ -39,10 +46,10 @@ pub async fn get_records(db: Data<Database>) -> HttpResponse {
 
     match cursor {
         Ok(cursor) => {
-            let records: Vec<Document> = cursor.try_collect().await.unwrap();
+            let records: Vec<Document> = cursor.try_collect().await.unwrap_or_else(|_| vec![]);
             HttpResponse::Ok().json(records)
         }
-        Err(err) => HttpResponse::InternalServerError().json(err.to_string()),
+        Err(_) => HttpResponse::InternalServerError().json(error_500),
     }
 }
 
@@ -72,13 +79,18 @@ pub async fn create_record(db: Data<Database>, new_record: Json<Record>) -> Http
 
     let result = records_coll.insert_one(new_record.into_inner(), None).await;
 
-    let success_msg = Msg {
+    let success_msg = ResponseMsg {
         msg: String::from("Record created"),
     };
 
     match result {
         Ok(_) => HttpResponse::Ok().json(success_msg),
-        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+        Err(err) => {
+            let error_msg = ResponseMsg {
+                msg: err.to_string(),
+            };
+            HttpResponse::InternalServerError().json(error_msg)
+        }
     }
 }
 
